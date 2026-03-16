@@ -1,0 +1,74 @@
+name = "deerflow-enterprise-project"
+version = "0.1.0"
+description = "Enterprise-grade AI agent system built with DeerFlow 2.0 harness"
+requires-python = ">=3.12"
+
+[dependencies]
+# DeerFlow harness dependencies
+agent-sandbox = ">=0.0.19"
+dotenv = ">=0.9.9"
+httpx = ">=0.28.0"
+kubernetes = ">=30.0.0"
+langchain = ">=1.2.3"
+langchain-anthropic = ">=1.3.4"
+langchain-deepseek = ">=1.0.1"
+langchain-mcp-adapters = ">=0.1.0"
+langchain-openai = ">=1.1.7"
+langgraph = ">=1.0.6"
+langgraph-api = ">=0.7.0,<0.8.0"
+langgraph-cli = ">=0.4.14"
+langgraph-runtime-inmem = ">=0.22.1"
+markdownify = ">=1.2.2"
+markitdown = ">=0.0.1a2"
+pydantic = ">=2.12.5"
+pyyaml = ">=6.0.3"
+readabilipy = ">=0.3.0"
+tavily-python = ">=0.7.17"
+firecrawl-py = ">=1.15.0"
+tiktoken = ">=0.8.0"
+ddgs = ">=9.10.0"
+duckdb = ">=1.4.4"
+langchain-google-genai = ">=4.2.1"
+langgraph-checkpoint-sqlite = ">=3.0.3"
+langgraph-sdk = ">=0.1.51"
+
+# Additional enterprise dependencies
+fastapi = ">=0.110.0"
+uvicorn = ">=0.29.0"
+sqlalchemy = ">=2.0.0"
+asyncpg = ">=0.29.0"
+redis = ">=5.0.0"
+celery = ">=5.3.0"
+requests = ">=2.31.0"
+python-jose = ">=3.3.0"
+passlib = ">=1.7.4"
+alembic = ">=1.13.0"
+python-multipart = ">=0.0.9"
+
+[dev-dependencies]
+pytest = ">=8.0.0"
+pytest-asyncio = ">=0.23.0"
+black = ">=24.0.0"
+ruff = ">=0.3.0"
+mypy = ">=1.8.0"
+pre-commit = ">=3.6.0"
+httpx = ">=0.27.0"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app", "packages"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+asyncio_mode = "auto"
+
+[dependency-groups]
+dev = [
+    "asyncpg>=0.31.0",
+]
