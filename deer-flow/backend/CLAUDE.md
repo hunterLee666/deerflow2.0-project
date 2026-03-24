@@ -156,13 +156,14 @@ Middlewares execute in strict order in `packages/harness/deerflow/agents/lead_ag
 2. **UploadsMiddleware** - Tracks and injects newly uploaded files into conversation
 3. **SandboxMiddleware** - Acquires sandbox, stores `sandbox_id` in state
 4. **DanglingToolCallMiddleware** - Injects placeholder ToolMessages for AIMessage tool_calls that lack responses (e.g., due to user interruption)
-5. **SummarizationMiddleware** - Context reduction when approaching token limits (optional, if enabled)
-6. **TodoListMiddleware** - Task tracking with `write_todos` tool (optional, if plan_mode)
-7. **TitleMiddleware** - Auto-generates thread title after first complete exchange
-8. **MemoryMiddleware** - Queues conversations for async memory update (filters to user + final AI responses)
-9. **ViewImageMiddleware** - Injects base64 image data before LLM call (conditional on vision support)
-10. **SubagentLimitMiddleware** - Truncates excess `task` tool calls from model response to enforce `MAX_CONCURRENT_SUBAGENTS` limit (optional, if subagent_enabled)
-11. **ClarificationMiddleware** - Intercepts `ask_clarification` tool calls, interrupts via `Command(goto=END)` (must be last)
+5. **GuardrailMiddleware** - Pre-tool-call authorization via pluggable `GuardrailProvider` protocol (optional, if `guardrails.enabled` in config). Evaluates each tool call and returns error ToolMessage on deny. Three provider options: built-in `AllowlistProvider` (zero deps), OAP policy providers (e.g. `aport-agent-guardrails`), or custom providers. See [docs/GUARDRAILS.md](docs/GUARDRAILS.md) for setup, usage, and how to implement a provider.
+6. **SummarizationMiddleware** - Context reduction when approaching token limits (optional, if enabled)
+7. **TodoListMiddleware** - Task tracking with `write_todos` tool (optional, if plan_mode)
+8. **TitleMiddleware** - Auto-generates thread title after first complete exchange and normalizes structured message content before prompting the title model
+9. **MemoryMiddleware** - Queues conversations for async memory update (filters to user + final AI responses)
+10. **ViewImageMiddleware** - Injects base64 image data before LLM call (conditional on vision support)
+11. **SubagentLimitMiddleware** - Truncates excess `task` tool calls from model response to enforce `MAX_CONCURRENT_SUBAGENTS` limit (optional, if subagent_enabled)
+12. **ClarificationMiddleware** - Intercepts `ask_clarification` tool calls, interrupts via `Command(goto=END)` (must be last)
 
 ### Configuration System
 
@@ -172,6 +173,8 @@ Setup: Copy `config.example.yaml` to `config.yaml` in the **project root** direc
 
 **Config Versioning**: `config.example.yaml` has a `config_version` field. On startup, `AppConfig.from_file()` compares user version vs example version and emits a warning if outdated. Missing `config_version` = version 0. Run `make config-upgrade` to auto-merge missing fields. When changing the config schema, bump `config_version` in `config.example.yaml`.
 
+**Config Caching**: `get_app_config()` caches the parsed config, but automatically reloads it when the resolved config path changes or the file's mtime increases. This keeps Gateway and LangGraph reads aligned with `config.yaml` edits without requiring a manual process restart.
+
 Configuration priority:
 1. Explicit `config_path` argument
 2. `DEER_FLOW_CONFIG_PATH` environment variable
@@ -179,6 +182,7 @@ Configuration priority:
 4. `config.yaml` in parent directory (project root - **recommended location**)
 
 Config values starting with `$` are resolved as environment variables (e.g., `$OPENAI_API_KEY`).
+`ModelConfig` also declares `use_responses_api` and `output_version` so OpenAI `/v1/responses` can be enabled explicitly while still using `langchain_openai:ChatOpenAI`.
 
 **Extensions Configuration** (`extensions_config.json`):
 
@@ -312,7 +316,7 @@ Bridges external messaging platforms (Feishu, Slack, Telegram) to the DeerFlow a
 ### Memory System (`packages/harness/deerflow/agents/memory/`)
 
 **Components**:
-- `updater.py` - LLM-based memory updates with fact extraction and atomic file I/O
+- `updater.py` - LLM-based memory updates with fact extraction, whitespace-normalized fact deduplication (trims leading/trailing whitespace before comparing), and atomic file I/O
 - `queue.py` - Debounced update queue (per-thread deduplication, configurable wait time)
 - `prompt.py` - Prompt templates for memory updates
 
@@ -325,8 +329,10 @@ Bridges external messaging platforms (Feishu, Slack, Telegram) to the DeerFlow a
 1. `MemoryMiddleware` filters messages (user inputs + final AI responses) and queues conversation
 2. Queue debounces (30s default), batches updates, deduplicates per-thread
 3. Background thread invokes LLM to extract context updates and facts
-4. Applies updates atomically (temp file + rename) with cache invalidation
+4. Applies updates atomically (temp file + rename) with cache invalidation, skipping duplicate fact content before append
 5. Next interaction injects top 15 facts + context into `<memory>` tags in system prompt
+
+Focused regression coverage for the updater lives in `backend/tests/test_memory_updater.py`.
 
 **Configuration** (`config.yaml` → `memory`):
 - `enabled` / `injection_enabled` - Master switches
